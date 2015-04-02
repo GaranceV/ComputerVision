@@ -219,7 +219,10 @@ if(waitKey(10) == 32){
     Mat img = hand2.reshape(0,1);
     ofstream os("letter.txt", ios::out | ios::app);
     os << "C,";
-    os << img << std::endl;
+    for (int k = 0 ; k < img.cols - 1 ; k++) {
+    os << (int)img.at<uchar>(k)<<", " ;
+    }
+    os << (int)img.at<uchar>(k)<<std::endl;
     os.close();
     }
 }
