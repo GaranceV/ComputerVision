@@ -1,0 +1,6 @@
+Barême
+12 ça marche
++2 Readme //Explication de toutes les modifications qui ont été faites
++2 Commenaires (pas forcément normalisé, // ok, les commentaires qu'on aurait voulu avoir au début...
++2 Fonctions / modularité / Robustesse (créer des fonctions si répétitions, pas de segfault impromptu)
++2 Nettoyage de code (détection 1 seul visage, enlever images...)
