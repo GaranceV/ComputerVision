@@ -45,3 +45,15 @@ Quand l'utilisateur veut enregistrer la sélection trouvée de la main, il appui
 On découpe ce rectangle pour le transformer en carré : cela permet de créer une nouvelle image (matrice) qui est carrée. 
 Afin d'éviter tout risque de parasitage par le visage qui serait trop proche de la main, on passe à 0 le tiers droit de l'image, dans lequel la main ne devrait pas se trouver. 
 C'est cette dernière matrice qu'on enregistre dans le fichier texte. Le fichier texte ci joint décrit la lettre C. 
+
+Version 3
+Utilisation de letterRecog
+
+-data letter_recognition.data
+-save fichierdesauvegarde.
+
+int layer_sz[] = {data->cols, 100, 100, class_count}
+				qui va devoir faire 256 au lieu de 16
+							2 autres couches de neurones cachées
+							Nous, on va mettre 4 à la place, pour une seule couche cachée. 4 est au pif, "pour voir"
+										toujours à 26, c'est les lettres de l'alphabet...

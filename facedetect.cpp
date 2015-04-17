@@ -2,6 +2,8 @@
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 #include "opencv2/video/tracking.hpp"
+#include "opencv2/ml/ml.hpp"
+#include "opencv2/core/core_c.h"
 
 
 #include <cctype>
@@ -34,8 +36,8 @@ Rect checkRoiBoundaries(Mat img, double upXnewRoi, double upYnewRoi, double newW
 //Deux entiers pour déterminer notre ROI. 
 int dx, dy;
 
-void camShiftFct(Mat& image, Rect selection, Mat& hist);
-void getTheHand(Mat image, Rect myHandRect);
+void camShiftFct(Mat& image, Rect selection, Mat& hist, CvANN_MLP& mlp);
+void getTheHand(Mat image, Rect myHandRect, CvANN_MLP& mlp);
 
 int main( int argc, const char** argv ) {
     CvCapture* capture = 0;
@@ -79,6 +81,18 @@ int main( int argc, const char** argv ) {
         cout << "In capture ..." << endl;
         Rect roi, previousroi;
         Mat computedHist;
+
+//loading the file to recognise letters : once we know we can capture from webcam, before the infinite loop of frames
+    char* filename_to_load = "myTraining.xml" ;
+    CvANN_MLP mlp;
+
+    mlp.load( filename_to_load);
+    if( !mlp.get_layer_count() ) {
+        printf( "Could not read the classifier %s\n", filename_to_load );
+    }
+    printf( "The classifier %s is loaded.\n", filename_to_load );
+
+
         for(;;) {
 			//On a besoin que notre Roi de départ fasse la taille de la frame de captue.
 			// En var globale, le dx et dy de décalage
@@ -99,8 +113,8 @@ int main( int argc, const char** argv ) {
                 //La première fois, besoin de calculer l'histogramme
                 //Ensite, seulement calcul de la backproj & camshift, à partir de l'histogramme
                 if (computedHist.cols < 1 && computedHist.rows < 1)
-                    camShiftFct(frameCopy, previousroi, computedHist);
-                else camShiftFct(frameCopy, previousroi, computedHist);
+                    camShiftFct(frameCopy, previousroi, computedHist, mlp);
+                else camShiftFct(frameCopy, previousroi, computedHist, mlp);
             }
             if(waitKey(10) > 32) goto _cleanup_; //au dessus de 32 pour ne pas parasiter l'usage de la barre d'espace
             //Force 10ms d'attente avant un cleanup, nécessaire pour bon fonctionnement de l'affichage avec la webcam. 
@@ -125,7 +139,7 @@ Rect nvlleSelec = Rect(0, 0, selection.x, hauteurIm);
     return nvlleSelec;
 }
 
-void camShiftFct(Mat& image, Rect selection, Mat& hist) {
+void camShiftFct(Mat& image, Rect selection, Mat& hist, CvANN_MLP& mlp) {
     Rect trackWindow;
     //déclaration matrice où on va ranger l'histogramme
     int hsize = 16;
@@ -185,7 +199,7 @@ void camShiftFct(Mat& image, Rect selection, Mat& hist) {
     //ici, on récupère un rectangle tout droit à partir du rectangle de travers. 
     Rect myHandRect = trackBox.boundingRect();
     
-    getTheHand(image, myHandRect);
+    getTheHand(backproj, myHandRect, mlp);
 
     ellipse( image, trackBox, Scalar(0,0,255), 3, CV_AA );
     rectangle(image, selection, CV_RGB(0,255,255)); //Dessin de la région du visage
@@ -195,7 +209,7 @@ void camShiftFct(Mat& image, Rect selection, Mat& hist) {
 
 }
 
-void getTheHand(Mat image, Rect myHandRect) {
+void getTheHand(Mat image, Rect myHandRect, CvANN_MLP& mlp) {
     //Se déclenche quand on appuie sur la touche espace
 if(waitKey(10) == 32){    
 //Transformation Rectangle de la main en carré 
@@ -216,15 +230,52 @@ if(waitKey(10) == 32){
     resize(hand2, hand2, Size(16,16), 0, 0, INTER_LINEAR);
     imshow("new hand", hand2);
 
-    Mat img = hand2.reshape(0,1);
+    Mat hand3;
+
+    hand2.convertTo(hand3,5);
+    
+
+    Mat img = hand3.reshape(0,1);
+
+
+    const int class_count = 26;
+
+    CvMat* mlp_response = cvCreateMat( 1, class_count, CV_32F );
+    printf("mlp response cree\n");
+    CvMat finalhand = img;
+
+    printf("final hand transfo en cvmat\n");
+
+        CvPoint max_loc = {0,0};
+        printf("my final hand : nb of cols : %d nb of rows : %d its type : %d \n", finalhand.cols, finalhand.rows, CV_MAT_TYPE(finalhand.type));
+        //(Both input and output must be floating-point matrices of the same type and have the same number of rows) 
+        printf("my mlp_response : nb of cols : %d nb of rows : %d its type : %d \n", mlp_response->cols, mlp_response->rows, CV_MAT_TYPE(mlp_response->type));
+        mlp.predict( &finalhand, mlp_response );//stocke les résultats dans mlp_response
+            printf("prediction\n");
+
+        cvMinMaxLoc( mlp_response, 0, 0, 0, &max_loc, 0 ); //fonction optimisée pour chercher dans le tableau son max
+        //valeur du min, & position sont mis à 0 car on ne veut pas les récup
+    printf("get the max\n");
+
+        int best_class = 0;
+        best_class = max_loc.x + 'A'; //on part du A, et on descend du max qu'on a trouvé : le + de probabilité de ce que la lettre soit
+
+        char theLETTER = (char)best_class;
+        cout <<"La lettre que j'ai trouvé : " << theLETTER <<endl;        
+
+
+   /*
+        Code pour écrire dans un fichier
     ofstream os("letter.txt", ios::out | ios::app);
-    os << "C,";
+    os << "A,";
     for (int k = 0 ; k < img.cols - 1 ; k++) {
-    os << (int)img.at<uchar>(k)<<", " ;
+    os << (int)img.at<uchar>(k)<<"," ;
     }
-    os << (int)img.at<uchar>(k)<<std::endl;
-    os.close();
+    os << (int)img.at<uchar>(img.cols)<<std::endl;
+    os.close();*/
     }
+
+
 }
 
 void detectAndDraw(Mat& img, CascadeClassifier& cascade,
